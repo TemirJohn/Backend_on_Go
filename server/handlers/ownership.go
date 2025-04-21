@@ -20,6 +20,17 @@ func BuyGame(c *gin.Context) {
 
 	db.DB.Create(&ownership)
 	c.JSON(http.StatusOK, gin.H{"message": "Game purchased"})
+
+	var game models.Game
+	if err := db.DB.First(&game, ownership.GameID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid game ID"})
+		return
+	}
+	var existing models.Ownership
+	if err := db.DB.Where("user_id = ? AND game_id = ?", user.ID, ownership.GameID).First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Game already owned"})
+		return
+	}
 }
 
 func GetLibrary(c *gin.Context) {

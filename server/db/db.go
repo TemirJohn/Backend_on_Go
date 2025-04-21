@@ -17,10 +17,9 @@ func InitDB() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "host=localhost port=5432 user=postgres dbname=gamehub password=11466795 sslmode=disable"
+		dsn = "host=localhost port=1123 user=postgres dbname=gamehub password=11466795 sslmode=disable"
 	}
 
 	DB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})

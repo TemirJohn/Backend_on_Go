@@ -26,7 +26,12 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, gin.H{
+		"id":    user.ID,
+		"email": user.Email,
+		"name":  user.Name,
+		"role":  user.Role,
+	})
 }
 
 func AuthMiddleware() gin.HandlerFunc {
