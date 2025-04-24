@@ -17,16 +17,24 @@ func InitDB() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+	// Загружаем строку подключения из .env
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "host=localhost port=1123 user=postgres dbname=gamehub password=11466795 sslmode=disable"
 	}
 
-	DB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatal(err)
+	// Инициализация глобальной переменной DB
+	var openErr error
+	DB, openErr = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if openErr != nil {
+		log.Fatal("failed to connect to the database:", openErr)
 	}
 
-	DB.AutoMigrate(&models.User{}, &models.Game{}, &models.Ownership{}, &models.Category{})
+	// Миграции
+	migrateErr := DB.AutoMigrate(&models.User{}, &models.Game{}, &models.Ownership{}, &models.Category{})
+	if migrateErr != nil {
+		log.Fatal("failed to migrate:", migrateErr)
+	}
+
 	log.Println("Database connected and migrated")
 }
