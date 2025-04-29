@@ -4,6 +4,7 @@ import (
 	"awesomeProject/db"
 	"awesomeProject/models"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 )
 
@@ -19,18 +20,25 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// Check if email already exists
+	// Проверка существующего email
 	var existingUser models.User
 	if err := db.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
 		return
 	}
 
-	// Create new user
+	// Хеширование пароля
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Создание пользователя
 	user := models.User{
 		Name:     input.Username,
 		Email:    input.Email,
-		Password: input.Password, // Password is already hashed by frontend
+		Password: string(hashedPassword),
 		Role:     input.Role,
 	}
 

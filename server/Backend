@@ -1,6 +1,89 @@
-DATABASE_URL=postgres://postgres:11466795@localhost:1123/gamehub?sslmode=disable
-PORT=8080
-JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+//package main
+//
+//import (
+//	"awesomeProject/db"
+//	"awesomeProject/handlers"
+//	"github.com/gin-contrib/cors"
+//	"github.com/gin-gonic/gin"
+//)
+//
+//func main() {
+//
+//	db.InitDB()
+//	r := gin.Default()
+//
+//	r.POST("/users", handlers.Register) // Added register route
+//
+//	r.Use(cors.New(cors.Config{
+//		AllowOrigins:     []string{"http://localhost:3000"},
+//		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+//		AllowHeaders:     []string{"Content-Type"},
+//		AllowCredentials: true,
+//	}))
+//
+//	r.POST("/login", handlers.Login)
+//	r.GET("/games", handlers.GetGames)
+//	r.POST("/games", handlers.AuthMiddleware(), handlers.CreateGame)
+//	r.POST("/ownership", handlers.AuthMiddleware(), handlers.BuyGame)
+//	r.GET("/library", handlers.AuthMiddleware(), handlers.GetLibrary)
+//	r.GET("/categories", handlers.GetCategories)
+//	r.POST("/categories", handlers.AuthMiddleware(), handlers.CreateCategory)
+//	r.PUT("/games/:id", handlers.AuthMiddleware(), handlers.UpdateGame)
+//	r.DELETE("/games/:id", handlers.AuthMiddleware(), handlers.DeleteGame)
+//	r.Run(":8080")
+//}
+
+package main
+
+import (
+	"awesomeProject/db"
+	"awesomeProject/handlers"
+	"github.com/gin-contrib/cors" // Added for CORS
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"log"
+	"os"
+)
+
+func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
+	// Initialize database
+	db.InitDB()
+
+	// Create Gin router
+	r := gin.Default()
+
+	// Add CORS middleware
+	r.Use(cors.Default())
+
+	// Public routes
+	r.POST("/login", handlers.Login)
+	r.POST("/users", handlers.Register) // Ensure this line is present
+
+	// Protected routes
+	protected := r.Group("/").Use(handlers.AuthMiddleware())
+	{
+		protected.GET("/games", handlers.GetGames)
+		protected.POST("/games", handlers.CreateGame)
+		protected.GET("/library", handlers.GetLibrary)
+		protected.POST("/ownership", handlers.BuyGame)
+		// Add other protected routes as needed
+	}
+
+	// Start server
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	if err := r.Run(":" + port); err != nil {
+		log.Fatal("Failed to start server:", err)
+	}
+}
+
 
 package db
 
@@ -158,7 +241,6 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-
 package handlers
 
 import (
@@ -299,7 +381,6 @@ func DeleteGame(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Game deleted"})
 }
 
-
 package handlers
 
 import (
@@ -350,6 +431,51 @@ func GetLibrary(c *gin.Context) {
 	c.JSON(http.StatusOK, games)
 }
 
+
+package handlers
+
+import (
+	"awesomeProject/db"
+	"awesomeProject/models"
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func Register(c *gin.Context) {
+	var input struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if email already exists
+	var existingUser models.User
+	if err := db.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+		return
+	}
+
+	// Create new user
+	user := models.User{
+		Name:     input.Username,
+		Email:    input.Email,
+		Password: input.Password, // Password is already hashed by frontend
+		Role:     input.Role,
+	}
+
+	if err := db.DB.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
+}
+
 package models
 
 type Category struct {
@@ -379,7 +505,10 @@ type Ownership struct {
 
 package models
 
+import "gorm.io/gorm"
+
 type User struct {
+	gorm.Model
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	Email    string `gorm:"unique;not null" json:"email"`
 	Password string `gorm:"not null" json:"password"`

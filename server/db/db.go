@@ -31,7 +31,7 @@ func InitDB() {
 	}
 
 	// Миграции
-	migrateErr := DB.AutoMigrate(&models.User{}, &models.Game{}, &models.Ownership{}, &models.Category{})
+	migrateErr := DB.AutoMigrate(&models.User{}, &models.Game{}, &models.Ownership{}, &models.Category{}, &models.Review{}, &models.Purchase{})
 	if migrateErr != nil {
 		log.Fatal("failed to migrate:", migrateErr)
 	}

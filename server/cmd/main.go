@@ -1,38 +1,3 @@
-//package main
-//
-//import (
-//	"awesomeProject/db"
-//	"awesomeProject/handlers"
-//	"github.com/gin-contrib/cors"
-//	"github.com/gin-gonic/gin"
-//)
-//
-//func main() {
-//
-//	db.InitDB()
-//	r := gin.Default()
-//
-//	r.POST("/users", handlers.Register) // Added register route
-//
-//	r.Use(cors.New(cors.Config{
-//		AllowOrigins:     []string{"http://localhost:3000"},
-//		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
-//		AllowHeaders:     []string{"Content-Type"},
-//		AllowCredentials: true,
-//	}))
-//
-//	r.POST("/login", handlers.Login)
-//	r.GET("/games", handlers.GetGames)
-//	r.POST("/games", handlers.AuthMiddleware(), handlers.CreateGame)
-//	r.POST("/ownership", handlers.AuthMiddleware(), handlers.BuyGame)
-//	r.GET("/library", handlers.AuthMiddleware(), handlers.GetLibrary)
-//	r.GET("/categories", handlers.GetCategories)
-//	r.POST("/categories", handlers.AuthMiddleware(), handlers.CreateCategory)
-//	r.PUT("/games/:id", handlers.AuthMiddleware(), handlers.UpdateGame)
-//	r.DELETE("/games/:id", handlers.AuthMiddleware(), handlers.DeleteGame)
-//	r.Run(":8080")
-//}
-
 package main
 
 import (
@@ -58,7 +23,14 @@ func main() {
 	r := gin.Default()
 
 	// Add CORS middleware
-	r.Use(cors.Default())
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},                   // Разрешить фронтенд
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Разрешить методы
+		AllowHeaders:     []string{"Authorization", "Content-Type"},           // Разрешить нужные заголовки
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true, // если используешь сессии/куки
+	}))
+	r.Static("/uploads", "./uploads")
 
 	// Public routes
 	r.POST("/login", handlers.Login)
@@ -68,10 +40,22 @@ func main() {
 	protected := r.Group("/").Use(handlers.AuthMiddleware())
 	{
 		protected.GET("/games", handlers.GetGames)
+		protected.GET("/games/:id", handlers.GetGameByID)
 		protected.POST("/games", handlers.CreateGame)
+		protected.PUT("/games/:id", handlers.UpdateGame)
+		protected.DELETE("/games/:id", handlers.DeleteGame)
 		protected.GET("/library", handlers.GetLibrary)
 		protected.POST("/ownership", handlers.BuyGame)
-		// Add other protected routes as needed
+		protected.GET("/categories", handlers.GetCategories)
+		protected.POST("/categories", handlers.CreateCategory)
+		protected.PUT("/categories/:id", handlers.UpdateCategory)
+		protected.DELETE("/categories/:id", handlers.DeleteCategory)
+		protected.GET("/users", handlers.GetUsers)
+		protected.DELETE("/users/:id", handlers.DeleteUser)
+		protected.PUT("/users/:id", handlers.UpdateUser)
+		protected.POST("/reviews", handlers.CreateReview)
+		protected.GET("/reviews", handlers.GetReviews)
+		protected.DELETE("/reviews/:id", handlers.DeleteReview)
 	}
 
 	// Start server
