@@ -9,4 +9,5 @@ type User struct {
 	Password string `gorm:"not null" json:"password"`
 	Name     string `gorm:"not null" json:"name"`
 	Role     string `gorm:"not null" json:"role"`
+	Avatar   string
 }
