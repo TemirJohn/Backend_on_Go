@@ -1,38 +1,3 @@
-//package main
-//
-//import (
-//	"awesomeProject/db"
-//	"awesomeProject/handlers"
-//	"github.com/gin-contrib/cors"
-//	"github.com/gin-gonic/gin"
-//)
-//
-//func main() {
-//
-//	db.InitDB()
-//	r := gin.Default()
-//
-//	r.POST("/users", handlers.Register) // Added register route
-//
-//	r.Use(cors.New(cors.Config{
-//		AllowOrigins:     []string{"http://localhost:3000"},
-//		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
-//		AllowHeaders:     []string{"Content-Type"},
-//		AllowCredentials: true,
-//	}))
-//
-//	r.POST("/login", handlers.Login)
-//	r.GET("/games", handlers.GetGames)
-//	r.POST("/games", handlers.AuthMiddleware(), handlers.CreateGame)
-//	r.POST("/ownership", handlers.AuthMiddleware(), handlers.BuyGame)
-//	r.GET("/library", handlers.AuthMiddleware(), handlers.GetLibrary)
-//	r.GET("/categories", handlers.GetCategories)
-//	r.POST("/categories", handlers.AuthMiddleware(), handlers.CreateCategory)
-//	r.PUT("/games/:id", handlers.AuthMiddleware(), handlers.UpdateGame)
-//	r.DELETE("/games/:id", handlers.AuthMiddleware(), handlers.DeleteGame)
-//	r.Run(":8080")
-//}
-
 package main
 
 import (
@@ -58,7 +23,14 @@ func main() {
 	r := gin.Default()
 
 	// Add CORS middleware
-	r.Use(cors.Default())
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},                   // Разрешить фронтенд
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Разрешить методы
+		AllowHeaders:     []string{"Authorization", "Content-Type"},           // Разрешить нужные заголовки
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true, // если используешь сессии/куки
+	}))
+	r.Static("/uploads", "./cmd/uploads")
 
 	// Public routes
 	r.POST("/login", handlers.Login)
@@ -68,10 +40,23 @@ func main() {
 	protected := r.Group("/").Use(handlers.AuthMiddleware())
 	{
 		protected.GET("/games", handlers.GetGames)
+		protected.GET("/games/:id", handlers.GetGameByID)
 		protected.POST("/games", handlers.CreateGame)
+		protected.PUT("/games/:id", handlers.UpdateGame)
+		protected.DELETE("/games/:id", handlers.DeleteGame)
+		protected.DELETE("/ownership", handlers.ReturnGame)
 		protected.GET("/library", handlers.GetLibrary)
 		protected.POST("/ownership", handlers.BuyGame)
-		// Add other protected routes as needed
+		protected.GET("/categories", handlers.GetCategories)
+		protected.POST("/categories", handlers.CreateCategory)
+		protected.PUT("/categories/:id", handlers.UpdateCategory)
+		protected.DELETE("/categories/:id", handlers.DeleteCategory)
+		protected.GET("/users", handlers.GetUsers)
+		protected.DELETE("/users/:id", handlers.DeleteUser)
+		protected.PUT("/users/:id", handlers.UpdateUser)
+		protected.POST("/reviews", handlers.CreateReview)
+		protected.GET("/reviews", handlers.GetReviews)
+		protected.DELETE("/reviews/:id", handlers.DeleteReview)
 	}
 
 	// Start server
@@ -83,7 +68,6 @@ func main() {
 		log.Fatal("Failed to start server:", err)
 	}
 }
-
 
 package db
 
@@ -118,7 +102,7 @@ func InitDB() {
 	}
 
 	// Миграции
-	migrateErr := DB.AutoMigrate(&models.User{}, &models.Game{}, &models.Ownership{}, &models.Category{})
+	migrateErr := DB.AutoMigrate(&models.User{}, &models.Game{}, &models.Ownership{}, &models.Category{}, &models.Review{}, &models.Purchase{})
 	if migrateErr != nil {
 		log.Fatal("failed to migrate:", migrateErr)
 	}
@@ -308,14 +292,15 @@ func DeleteCategory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Category deleted"})
 }
 
-
 package handlers
 
 import (
 	"awesomeProject/db"
 	"awesomeProject/models"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
 )
 
 func GetGames(c *gin.Context) {
@@ -329,20 +314,68 @@ func GetGames(c *gin.Context) {
 }
 
 func CreateGame(c *gin.Context) {
-
-	var game models.Game
-	if err := c.ShouldBindJSON(&game); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	user := c.MustGet("user").(models.User)
 	if user.Role != "admin" && user.Role != "developer" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admins or developers only"})
 		return
 	}
 
-	db.DB.Create(&game)
+	// Parse form values manually
+	name := c.PostForm("name")
+	priceStr := c.PostForm("price")
+	description := c.PostForm("description")
+	categoryIDStr := c.PostForm("category_id")
+	developerIDStr := c.PostForm("developerId")
+
+	if name == "" || priceStr == "" || categoryIDStr == "" || developerIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required fields"})
+		return
+	}
+
+	price, err := strconv.ParseFloat(priceStr, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price"})
+		return
+	}
+	categoryID, err := strconv.Atoi(categoryIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+		return
+	}
+	developerID, err := strconv.Atoi(developerIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid developer ID"})
+		return
+	}
+
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Image is required"})
+		return
+	}
+
+	// Save file
+	filePath := fmt.Sprintf("uploads/%s", file.Filename)
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+		return
+	}
+
+	// Create game model manually
+	game := models.Game{
+		Name:        name,
+		Price:       price,
+		Description: description,
+		CategoryID:  uint(categoryID),
+		DeveloperID: uint(developerID),
+		Image:       filePath,
+	}
+
+	if err := db.DB.Create(&game).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create game"})
+		return
+	}
+
 	c.JSON(http.StatusOK, game)
 }
 
@@ -381,6 +414,41 @@ func DeleteGame(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Game deleted"})
 }
 
+func GetGameByID(c *gin.Context) {
+	id := c.Param("id")
+	var game models.Game
+
+	if err := db.DB.Preload("Category").First(&game, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Game not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, game)
+}
+
+func ReturnGame(c *gin.Context) {
+	user := c.MustGet("user").(models.User)
+	gameID := c.Query("gameId")
+
+	if gameID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gameId is required"})
+		return
+	}
+
+	var ownership models.Ownership
+	if err := db.DB.Where("user_id = ? AND game_id = ?", user.ID, gameID).First(&ownership).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ownership not found"})
+		return
+	}
+
+	if err := db.DB.Delete(&ownership).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete ownership"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Game returned successfully"})
+}
+
 package handlers
 
 import (
@@ -401,36 +469,99 @@ func BuyGame(c *gin.Context) {
 	ownership.UserID = user.ID
 	ownership.Status = "owned"
 
-	db.DB.Create(&ownership)
-	c.JSON(http.StatusOK, gin.H{"message": "Game purchased"})
-
 	var game models.Game
 	if err := db.DB.First(&game, ownership.GameID).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid game ID"})
 		return
 	}
+
 	var existing models.Ownership
 	if err := db.DB.Where("user_id = ? AND game_id = ?", user.ID, ownership.GameID).First(&existing).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Game already owned"})
 		return
 	}
+
+	db.DB.Create(&ownership)
+	c.JSON(http.StatusOK, gin.H{"message": "Game purchased"})
 }
 
 func GetLibrary(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	var ownerships []models.Ownership
-	db.DB.Where("user_id = ?", user.ID).Find(&ownerships)
+	db.DB.Where("user_id = ?", user.ID).Preload("Game").Find(&ownerships)
 
 	var games []models.Game
 	for _, o := range ownerships {
-		var game models.Game
-		db.DB.First(&game, o.GameID)
-		games = append(games, game)
+		games = append(games, o.Game)
 	}
 
 	c.JSON(http.StatusOK, games)
 }
 
+package handlers
+
+import (
+	"awesomeProject/db"
+	"awesomeProject/models"
+	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+	"net/http"
+)
+
+func Register(c *gin.Context) {
+	var input struct {
+		Username string `form:"username"`
+		Email    string `form:"email"`
+		Password string `form:"password"`
+		Role     string `form:"role"`
+	}
+
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Проверка существующего email
+	var existingUser models.User
+	if err := db.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+		return
+	}
+
+	// Хеширование пароля
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Загрузка аватара
+	file, err := c.FormFile("avatar")
+	var avatarPath string
+	if err == nil {
+		avatarPath = "uploads/" + file.Filename
+		if err := c.SaveUploadedFile(file, avatarPath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar"})
+			return
+		}
+	}
+
+	// Создание пользователя
+	user := models.User{
+		Name:     input.Username,
+		Email:    input.Email,
+		Password: string(hashedPassword),
+		Role:     input.Role,
+		Avatar:   avatarPath,
+	}
+
+	if err := db.DB.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
+}
 
 package handlers
 
@@ -441,39 +572,147 @@ import (
 	"net/http"
 )
 
-func Register(c *gin.Context) {
-	var input struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
+func CreateReview(c *gin.Context) {
+	var review models.Review
+
+	if err := c.ShouldBindJSON(&review); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Check if email already exists
-	var existingUser models.User
-	if err := db.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+	user := c.MustGet("user").(models.User)
+	review.UserID = user.ID
+
+	if err := db.DB.Create(&review).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review"})
 		return
 	}
 
-	// Create new user
-	user := models.User{
-		Name:     input.Username,
-		Email:    input.Email,
-		Password: input.Password, // Password is already hashed by frontend
-		Role:     input.Role,
-	}
+	c.JSON(http.StatusOK, review)
+}
 
-	if err := db.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+func GetReviews(c *gin.Context) {
+	gameID := c.Query("gameId")
+	var reviews []models.Review
+	query := db.DB
+	if gameID != "" {
+		query = query.Where("game_id = ?", gameID)
+	}
+	query.Find(&reviews)
+	c.JSON(http.StatusOK, reviews)
+}
+
+func DeleteReview(c *gin.Context) {
+	id := c.Param("id")
+	var review models.Review
+	if err := db.DB.First(&review, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Review not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
+	user := c.MustGet("user").(models.User)
+	if user.Role != "admin" && user.ID != review.UserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins or review author can delete"})
+		return
+	}
+
+	if err := db.DB.Delete(&review).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete review"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Review deleted"})
+}
+
+package handlers
+
+import (
+	"awesomeProject/db"
+	"awesomeProject/models"
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func GetUsers(c *gin.Context) {
+	user := c.MustGet("user").(models.User)
+	if user.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admins only"})
+		return
+	}
+	var users []models.User
+	db.DB.Find(&users)
+	c.JSON(http.StatusOK, users)
+}
+
+func DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+	user := c.MustGet("user").(models.User)
+	if user.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admins only"})
+		return
+	}
+	var targetUser models.User
+	if err := db.DB.First(&targetUser, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	if err := db.DB.Delete(&targetUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted"})
+}
+
+func UpdateUser(c *gin.Context) {
+	id := c.Param("id")
+	currentUser := c.MustGet("user").(models.User)
+
+	if currentUser.Role != "admin" && fmt.Sprint(currentUser.ID) != id {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var targetUser models.User
+	if err := db.DB.First(&targetUser, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Аватарка
+	file, err := c.FormFile("avatar")
+	if err == nil {
+		filename := fmt.Sprintf("uploads/%s", file.Filename)
+		if err := c.SaveUploadedFile(file, filename); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar"})
+			return
+		}
+		targetUser.Avatar = filename
+	}
+
+	// Дополнительные поля
+	var input struct {
+		Name *string `form:"name"` // если multipart/form-data
+		Role *string `form:"role"`
+	}
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if input.Name != nil {
+		targetUser.Name = *input.Name
+	}
+	if input.Role != nil && currentUser.Role == "admin" { // только админ может менять роль
+		targetUser.Role = *input.Role
+	}
+
+	if err := db.DB.Save(&targetUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, targetUser)
 }
 
 package models
@@ -490,8 +729,10 @@ type Game struct {
 	Name        string   `gorm:"not null" json:"name"`
 	Price       float64  `gorm:"not null" json:"price"`
 	Description string   `json:"description"`
-	CategoryID  uint     `json:"categoryId"`
+	CategoryID  uint     `json:"category_id"`
 	Category    Category `gorm:"foreignKey:CategoryID" json:"category"`
+	Image       string   `json:"image"`
+	DeveloperID uint     `json:"developerId"`
 }
 
 package models
@@ -501,6 +742,25 @@ type Ownership struct {
 	UserID uint   `gorm:"not null" json:"userId"`
 	GameID uint   `gorm:"not null" json:"gameId"`
 	Status string `gorm:"not null" json:"status"`
+	Game   Game   `gorm:"foreignKey:GameID" json:"game"`
+}
+
+package models
+
+type Purchase struct {
+	ID     uint `gorm:"primaryKey" json:"id"`
+	UserID uint `gorm:"not null" json:"userId"`
+	GameID uint `gorm:"not null" json:"gameId"`
+}
+
+package models
+
+type Review struct {
+	ID      uint   `gorm:"primaryKey" json:"id"`
+	UserID  uint   `json:"userId"`
+	GameID  uint   `json:"gameId"`
+	Rating  int    `json:"rating"`
+	Comment string `json:"comment"`
 }
 
 package models
@@ -514,4 +774,5 @@ type User struct {
 	Password string `gorm:"not null" json:"password"`
 	Name     string `gorm:"not null" json:"name"`
 	Role     string `gorm:"not null" json:"role"`
+	Avatar   string
 }

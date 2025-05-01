@@ -35,24 +35,30 @@ func main() {
 	// Public routes
 	r.POST("/login", handlers.Login)
 	r.POST("/users", handlers.Register) // Ensure this line is present
+	r.GET("/games", handlers.GetGames)
+	r.GET("/categories", handlers.GetCategories)
 
 	// Protected routes
 	protected := r.Group("/").Use(handlers.AuthMiddleware())
 	{
-		protected.GET("/games", handlers.GetGames)
+		//protected.GET("/games", handlers.GetGames)
 		protected.GET("/games/:id", handlers.GetGameByID)
 		protected.POST("/games", handlers.CreateGame)
 		protected.PUT("/games/:id", handlers.UpdateGame)
 		protected.DELETE("/games/:id", handlers.DeleteGame)
+		protected.DELETE("/ownership", handlers.ReturnGame)
 		protected.GET("/library", handlers.GetLibrary)
 		protected.POST("/ownership", handlers.BuyGame)
-		protected.GET("/categories", handlers.GetCategories)
+		//protected.GET("/categories", handlers.GetCategories)
 		protected.POST("/categories", handlers.CreateCategory)
 		protected.PUT("/categories/:id", handlers.UpdateCategory)
 		protected.DELETE("/categories/:id", handlers.DeleteCategory)
 		protected.GET("/users", handlers.GetUsers)
 		protected.DELETE("/users/:id", handlers.DeleteUser)
 		protected.PUT("/users/:id", handlers.UpdateUser)
+		protected.GET("/users/:id", handlers.GetUserByID)
+		protected.POST("/users/:id/ban", handlers.BanUser)
+		protected.POST("/users/:id/unban", handlers.UnbanUser)
 		protected.POST("/reviews", handlers.CreateReview)
 		protected.GET("/reviews", handlers.GetReviews)
 		protected.DELETE("/reviews/:id", handlers.DeleteReview)

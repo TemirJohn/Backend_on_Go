@@ -27,6 +27,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	if user.IsBanned {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Your account is banned"})
+		return
+	}
+
 	// Проверка пароля с использованием bcrypt
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный email или пароль"})

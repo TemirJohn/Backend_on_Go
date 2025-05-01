@@ -9,5 +9,6 @@ type User struct {
 	Password string `gorm:"not null" json:"password"`
 	Name     string `gorm:"not null" json:"name"`
 	Role     string `gorm:"not null" json:"role"`
-	Avatar   string
+	Avatar   string `json:"avatar"`
+	IsBanned bool   `gorm:"default:false" json:"isBanned"`
 }

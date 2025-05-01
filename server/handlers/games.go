@@ -5,6 +5,8 @@ import (
 	"awesomeProject/models"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -87,36 +89,103 @@ func CreateGame(c *gin.Context) {
 
 func UpdateGame(c *gin.Context) {
 	id := c.Param("id")
+
+	// Найти игру по ID
 	var game models.Game
 	if err := db.DB.First(&game, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Game not found"})
 		return
 	}
-	if err := c.ShouldBindJSON(&game); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+
+	// Проверить роль пользователя
 	user := c.MustGet("user").(models.User)
-	if user.Role != "admin" && user.Role != "developer" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admins or developers only"})
+	if user.Role != "admin" && (user.Role != "developer" || user.ID != game.DeveloperID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
-	db.DB.Save(&game)
+
+	// Получить данные формы
+	name := c.PostForm("name")
+	price := c.PostForm("price")
+	description := c.PostForm("description")
+
+	// Обновить значения
+	if name != "" {
+		game.Name = name
+	}
+	if description != "" {
+		game.Description = description
+	}
+	if price != "" {
+		if parsedPrice, err := strconv.ParseFloat(price, 64); err == nil {
+			game.Price = parsedPrice
+		}
+	}
+
+	// Если есть новое изображение
+	file, err := c.FormFile("image")
+	if err == nil {
+		imagePath := "uploads/" + file.Filename
+		if err := c.SaveUploadedFile(file, imagePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+			return
+		}
+		game.Image = imagePath
+	}
+
+	// Сохранить обновления
+	if err := db.DB.Save(&game).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update game"})
+		return
+	}
+
 	c.JSON(http.StatusOK, game)
 }
+
 func DeleteGame(c *gin.Context) {
 	id := c.Param("id")
+	log.Printf("Attempting to delete game ID: %s", id)
 	var game models.Game
 	if err := db.DB.First(&game, id).Error; err != nil {
+		log.Printf("Game not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Game not found"})
 		return
 	}
 	user := c.MustGet("user").(models.User)
+	log.Printf("User ID: %d, Role: %s", user.ID, user.Role)
 	if user.Role != "admin" && user.Role != "developer" {
+		log.Printf("Access denied for role: %s", user.Role)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admins or developers only"})
 		return
 	}
-	db.DB.Delete(&game)
+	if user.Role == "developer" && game.DeveloperID != user.ID {
+		log.Printf("Developer %d cannot delete game %s (owned by %d)", user.ID, id, game.DeveloperID)
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only delete your own games"})
+		return
+	}
+	err := db.DB.Transaction(func(tx *gorm.DB) error {
+		// Удаление связанных записей
+		if err := tx.Where("game_id = ?", id).Delete(&models.Ownership{}).Error; err != nil {
+			log.Printf("Failed to delete ownerships: %v", err)
+			return err
+		}
+		if err := tx.Where("game_id = ?", id).Delete(&models.Review{}).Error; err != nil {
+			log.Printf("Failed to delete reviews: %v", err)
+			return err
+		}
+		// Удаление игры
+		if err := tx.Delete(&game).Error; err != nil {
+			log.Printf("Failed to delete game: %v", err)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("Transaction failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete game: " + err.Error()})
+		return
+	}
+	log.Println("Game deleted successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "Game deleted"})
 }
 
@@ -130,4 +199,27 @@ func GetGameByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, game)
+}
+
+func ReturnGame(c *gin.Context) {
+	user := c.MustGet("user").(models.User)
+	gameID := c.Query("gameId")
+
+	if gameID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gameId is required"})
+		return
+	}
+
+	var ownership models.Ownership
+	if err := db.DB.Where("user_id = ? AND game_id = ?", user.ID, gameID).First(&ownership).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ownership not found"})
+		return
+	}
+
+	if err := db.DB.Delete(&ownership).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete ownership"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Game returned successfully"})
 }

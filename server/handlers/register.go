@@ -10,12 +10,13 @@ import (
 
 func Register(c *gin.Context) {
 	var input struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
+		Username string `form:"username"`
+		Email    string `form:"email"`
+		Password string `form:"password"`
+		Role     string `form:"role"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
+
+	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -34,12 +35,24 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// Загрузка аватара
+	file, err := c.FormFile("avatar")
+	var avatarPath string
+	if err == nil {
+		avatarPath = "uploads/" + file.Filename
+		if err := c.SaveUploadedFile(file, avatarPath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar"})
+			return
+		}
+	}
+
 	// Создание пользователя
 	user := models.User{
 		Name:     input.Username,
 		Email:    input.Email,
 		Password: string(hashedPassword),
 		Role:     input.Role,
+		Avatar:   avatarPath,
 	}
 
 	if err := db.DB.Create(&user).Error; err != nil {
