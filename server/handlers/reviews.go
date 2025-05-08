@@ -29,7 +29,7 @@ func CreateReview(c *gin.Context) {
 func GetReviews(c *gin.Context) {
 	gameID := c.Query("gameId")
 	var reviews []models.Review
-	query := db.DB
+	query := db.DB.Preload("User")
 	if gameID != "" {
 		query = query.Where("game_id = ?", gameID)
 	}

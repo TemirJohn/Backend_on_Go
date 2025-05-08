@@ -79,7 +79,7 @@ func UpdateUser(c *gin.Context) {
 	// Аватарка
 	file, err := c.FormFile("avatar")
 	if err == nil {
-		filename := fmt.Sprintf("Uploads/%s", file.Filename)
+		filename := fmt.Sprintf("uploads/%s", file.Filename)
 		log.Printf("Saving avatar to: %s", filename)
 		if err := c.SaveUploadedFile(file, filename); err != nil {
 			log.Printf("Failed to save avatar: %v", err)
@@ -90,7 +90,6 @@ func UpdateUser(c *gin.Context) {
 		log.Printf("Updated avatar path: %s", targetUser.Avatar)
 	}
 
-	// Дополнительные поля
 	var input struct {
 		Name     *string `form:"name"`
 		Role     *string `form:"role"`

@@ -90,26 +90,22 @@ func CreateGame(c *gin.Context) {
 func UpdateGame(c *gin.Context) {
 	id := c.Param("id")
 
-	// Найти игру по ID
 	var game models.Game
 	if err := db.DB.First(&game, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Game not found"})
 		return
 	}
 
-	// Проверить роль пользователя
 	user := c.MustGet("user").(models.User)
 	if user.Role != "admin" && (user.Role != "developer" || user.ID != game.DeveloperID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
 
-	// Получить данные формы
 	name := c.PostForm("name")
 	price := c.PostForm("price")
 	description := c.PostForm("description")
 
-	// Обновить значения
 	if name != "" {
 		game.Name = name
 	}
@@ -122,7 +118,6 @@ func UpdateGame(c *gin.Context) {
 		}
 	}
 
-	// Если есть новое изображение
 	file, err := c.FormFile("image")
 	if err == nil {
 		imagePath := "uploads/" + file.Filename
@@ -133,7 +128,6 @@ func UpdateGame(c *gin.Context) {
 		game.Image = imagePath
 	}
 
-	// Сохранить обновления
 	if err := db.DB.Save(&game).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update game"})
 		return
@@ -164,7 +158,6 @@ func DeleteGame(c *gin.Context) {
 		return
 	}
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
-		// Удаление связанных записей
 		if err := tx.Where("game_id = ?", id).Delete(&models.Ownership{}).Error; err != nil {
 			log.Printf("Failed to delete ownerships: %v", err)
 			return err

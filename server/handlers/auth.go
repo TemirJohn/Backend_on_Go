@@ -32,23 +32,20 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Проверка пароля с использованием bcrypt
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный email или пароль"})
 		return
 	}
 
-	// Создание JWT токена
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID,
 		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(), // Токен действителен 24 часа
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	// Подпись токена секретным ключом
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "your_default_secret_key" // Замените на безопасный ключ в .env
+		secret = "your_default_secret_key"
 	}
 	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
@@ -56,21 +53,14 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Возвращаем токен и данные пользователя
 	c.JSON(http.StatusOK, gin.H{
 		"token": tokenString,
-		"user": gin.H{
-			"id":    user.ID,
-			"email": user.Email,
-			"name":  user.Name,
-			"role":  user.Role,
-		},
+		"user":  user, // Возвращаем полный объект user, включая avatar
 	})
 }
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Извлечение токена из заголовка Authorization (формат: Bearer <token>)
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || len(authHeader) < 7 || authHeader[:7] != "Bearer " {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Неавторизован"})
@@ -79,7 +69,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 		tokenString := authHeader[7:]
 
-		// Парсинг и проверка токена
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
 			secret = "your_default_secret_key"
@@ -96,7 +85,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Извлечение данных из токена
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Недействительные данные токена"})
@@ -104,7 +92,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Проверка пользователя
 		userID := uint(claims["user_id"].(float64))
 		var user models.User
 		if err := db.DB.First(&user, userID).Error; err != nil {

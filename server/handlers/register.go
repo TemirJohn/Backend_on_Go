@@ -5,6 +5,7 @@ import (
 	"awesomeProject/models"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"log"
 	"net/http"
 )
 
@@ -59,6 +60,12 @@ func Register(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
+
+	if err := c.SaveUploadedFile(file, avatarPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar: " + err.Error()})
+		return
+	}
+	log.Printf("Avatar saved to: %s", avatarPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
 }
