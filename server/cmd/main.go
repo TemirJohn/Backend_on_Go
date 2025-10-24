@@ -3,7 +3,7 @@ package main
 import (
 	"awesomeProject/db"
 	"awesomeProject/handlers"
-	"github.com/gin-contrib/cors" // Added for CORS
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"log"
@@ -11,45 +11,39 @@ import (
 )
 
 func main() {
-	// Load .env file
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
 
-	// Initialize database
 	db.InitDB()
 
-	// Create Gin router
 	r := gin.Default()
 
-	// Add CORS middleware
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},                   // Разрешить фронтенд
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Разрешить методы
-		AllowHeaders:     []string{"Authorization", "Content-Type"},           // Разрешить нужные заголовки
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true, // если используешь сессии/куки
+		AllowCredentials: true,
 	}))
 	r.Static("/uploads", "./uploads")
 
 	// Public routes
 	r.POST("/login", handlers.Login)
-	r.POST("/users", handlers.Register) // Ensure this line is present
+	r.POST("/users", handlers.Register)
 	r.GET("/games", handlers.GetGames)
+	r.GET("/games/:id", handlers.GetGameByID)
 	r.GET("/categories", handlers.GetCategories)
+	r.GET("/reviews", handlers.GetReviews)
 
-	// Protected routes
 	protected := r.Group("/").Use(handlers.AuthMiddleware())
 	{
-		//protected.GET("/games", handlers.GetGames)
-		protected.GET("/games/:id", handlers.GetGameByID)
 		protected.POST("/games", handlers.CreateGame)
 		protected.PUT("/games/:id", handlers.UpdateGame)
 		protected.DELETE("/games/:id", handlers.DeleteGame)
 		protected.DELETE("/ownership", handlers.ReturnGame)
 		protected.GET("/library", handlers.GetLibrary)
 		protected.POST("/ownership", handlers.BuyGame)
-		//protected.GET("/categories", handlers.GetCategories)
 		protected.POST("/categories", handlers.CreateCategory)
 		protected.PUT("/categories/:id", handlers.UpdateCategory)
 		protected.DELETE("/categories/:id", handlers.DeleteCategory)
@@ -60,11 +54,9 @@ func main() {
 		protected.POST("/users/:id/ban", handlers.BanUser)
 		protected.POST("/users/:id/unban", handlers.UnbanUser)
 		protected.POST("/reviews", handlers.CreateReview)
-		protected.GET("/reviews", handlers.GetReviews)
 		protected.DELETE("/reviews/:id", handlers.DeleteReview)
 	}
 
-	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
