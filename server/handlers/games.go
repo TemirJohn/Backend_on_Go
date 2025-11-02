@@ -28,7 +28,6 @@ func CreateGame(c *gin.Context) {
 		return
 	}
 
-	// Parse form values manually
 	name := c.PostForm("name")
 	priceStr := c.PostForm("price")
 	description := c.PostForm("description")
@@ -62,14 +61,12 @@ func CreateGame(c *gin.Context) {
 		return
 	}
 
-	// Save file
 	filePath := fmt.Sprintf("uploads/%s", file.Filename)
 	if err := c.SaveUploadedFile(file, filePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
 		return
 	}
 
-	// Create game model manually
 	game := models.Game{
 		Name:        name,
 		Price:       price,
@@ -166,7 +163,7 @@ func DeleteGame(c *gin.Context) {
 			log.Printf("Failed to delete reviews: %v", err)
 			return err
 		}
-		// Удаление игры
+		// Delete game
 		if err := tx.Delete(&game).Error; err != nil {
 			log.Printf("Failed to delete game: %v", err)
 			return err

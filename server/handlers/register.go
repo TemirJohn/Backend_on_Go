@@ -3,6 +3,7 @@ package handlers
 import (
 	"awesomeProject/db"
 	"awesomeProject/models"
+	"awesomeProject/utils"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"log"
@@ -10,15 +11,17 @@ import (
 )
 
 func Register(c *gin.Context) {
-	var input struct {
-		Username string `form:"username"`
-		Email    string `form:"email"`
-		Password string `form:"password"`
-		Role     string `form:"role"`
-	}
+	var input models.RegisterInput
 
-	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Bind form data
+	input.Username = c.PostForm("username")
+	input.Email = c.PostForm("email")
+	input.Password = c.PostForm("password")
+	input.Role = c.PostForm("role")
+
+	// ДОБАВЛЕНО: Валидация
+	if err := utils.ValidateStruct(input); err != nil {
+		utils.ValidationErrorResponse(c, err)
 		return
 	}
 
@@ -45,6 +48,7 @@ func Register(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar"})
 			return
 		}
+		log.Printf("Avatar saved to: %s", avatarPath)
 	}
 
 	// Создание пользователя
@@ -60,12 +64,6 @@ func Register(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
-
-	if err := c.SaveUploadedFile(file, avatarPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar: " + err.Error()})
-		return
-	}
-	log.Printf("Avatar saved to: %s", avatarPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
 }
