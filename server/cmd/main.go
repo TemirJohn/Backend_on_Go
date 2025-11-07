@@ -3,6 +3,7 @@ package main
 import (
 	"awesomeProject/db"
 	"awesomeProject/handlers"
+	"awesomeProject/middleware"
 	"crypto/tls"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -26,16 +27,24 @@ func main() {
 
 	r := gin.Default()
 
+	// Security Headers Middleware (FIRST!)
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.RateLimitInfo())
+	r.Use(middleware.RemovePoweredBy())
+
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000", "https://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
 	r.Static("/uploads", "./uploads")
 
-	// Public routes
+	// CSRF token endpoint (public, no auth required)
+	r.GET("/csrf-token", middleware.GetCSRFTokenHandler)
+
+	// Public routes (no auth, no CSRF)
 	r.POST("/login", handlers.Login)
 	r.POST("/users", handlers.Register)
 	r.GET("/games", handlers.GetGames)
@@ -43,7 +52,10 @@ func main() {
 	r.GET("/categories", handlers.GetCategories)
 	r.GET("/reviews", handlers.GetReviews)
 
-	protected := r.Group("/").Use(handlers.AuthMiddleware())
+	// Protected routes (auth + CSRF required)
+	protected := r.Group("/")
+	protected.Use(handlers.AuthMiddleware())
+	protected.Use(middleware.CSRFProtection())
 	{
 		protected.POST("/games", handlers.CreateGame)
 		protected.PUT("/games/:id", handlers.UpdateGame)
@@ -79,6 +91,8 @@ func main() {
 		log.Println("🔒 Starting server with HTTPS on port", port)
 		log.Println("📜 Certificate:", certFile)
 		log.Println("🔑 Private Key:", keyFile)
+		log.Println("🔐 Security Headers: ENABLED")
+		log.Println("🛡️  CSRF Protection: ENABLED")
 
 		// TLS Configuration with secure defaults
 		tlsConfig := &tls.Config{
@@ -107,6 +121,8 @@ func main() {
 		// HTTP Configuration
 		log.Println("🌐 Starting server with HTTP on port", port)
 		log.Println("⚠️  WARNING: Running without HTTPS. Set USE_HTTPS=true for production")
+		log.Println("🛡️  CSRF Protection: ENABLED")
+		log.Println("🔐 Security Headers: ENABLED")
 
 		if err := r.Run(":" + port); err != nil {
 			log.Fatal("❌ Failed to start server:", err)
