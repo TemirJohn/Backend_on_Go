@@ -3,8 +3,15 @@ package models
 type Review struct {
 	ID      uint   `gorm:"primaryKey" json:"id"`
 	UserID  uint   `json:"userId"`
-	GameID  uint   `json:"gameId"`
+	GameID  uint   `json:"gameId" validate:"required,gte=1"`
 	User    User   `gorm:"foreignKey:UserID" json:"user"`
-	Rating  int    `json:"rating"`
-	Comment string `json:"comment"`
+	Rating  int    `json:"rating" validate:"required,gte=1,lte=5"`
+	Comment string `json:"comment" validate:"max=1000"`
+}
+
+// ReviewCreateInput - для создания отзыва
+type ReviewCreateInput struct {
+	GameID  uint   `json:"gameId" validate:"required,gte=1"`
+	Rating  int    `json:"rating" validate:"required,gte=1,lte=5"`
+	Comment string `json:"comment" validate:"max=1000"`
 }

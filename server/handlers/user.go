@@ -76,7 +76,6 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Аватарка
 	file, err := c.FormFile("avatar")
 	if err == nil {
 		filename := fmt.Sprintf("uploads/%s", file.Filename)

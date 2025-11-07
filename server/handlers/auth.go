@@ -3,6 +3,7 @@ package handlers
 import (
 	"awesomeProject/db"
 	"awesomeProject/models"
+	"awesomeProject/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -12,12 +13,16 @@ import (
 )
 
 func Login(c *gin.Context) {
-	var input struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var input models.LoginInput
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ДОБАВЛЕНО: Валидация
+	if err := utils.ValidateStruct(input); err != nil {
+		utils.ValidationErrorResponse(c, err)
 		return
 	}
 
@@ -55,7 +60,7 @@ func Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"token": tokenString,
-		"user":  user, // Возвращаем полный объект user, включая avatar
+		"user":  user,
 	})
 }
 
