@@ -4,13 +4,16 @@ import (
 	"awesomeProject/db"
 	"awesomeProject/handlers"
 	"awesomeProject/middleware"
+	"awesomeProject/monitoring"
+	"awesomeProject/utils"
 	"crypto/tls"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -18,7 +21,16 @@ func main() {
 		log.Println("No .env file found")
 	}
 
+	// Initialize logger FIRST
+	utils.InitLogger()
+	utils.Log.Info("🚀 Starting application...")
+
+	
 	db.InitDB()
+	utils.Log.Info("✅ Database connected and migrated")
+
+	monitoring.InitMetrics()
+	utils.Log.Info("📊 Prometheus metrics initialized")
 
 	// Set to release mode in production
 	if os.Getenv("GIN_MODE") == "release" {
@@ -26,6 +38,13 @@ func main() {
 	}
 
 	r := gin.Default()
+
+	// Request Logging Middleware (FIRST for all requests)
+	r.Use(middleware.RequestLogger())
+	r.Use(middleware.ErrorLogger())
+
+	// Prometheus Metrics Middleware
+	r.Use(monitoring.PrometheusMiddleware())
 
 	// Security Headers Middleware (FIRST!)
 	r.Use(middleware.SecurityHeaders())
@@ -40,6 +59,17 @@ func main() {
 		AllowCredentials: true,
 	}))
 	r.Static("/uploads", "./uploads")
+
+	// Prometheus metrics endpoint
+	r.GET("/metrics", monitoring.PrometheusHandler())
+
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "healthy",
+			"version": "1.0.0",
+		})
+	})
 
 	// CSRF token endpoint (public, no auth required)
 	r.GET("/csrf-token", middleware.GetCSRFTokenHandler)
@@ -86,6 +116,18 @@ func main() {
 	certFile := os.Getenv("TLS_CERT_FILE")
 	keyFile := os.Getenv("TLS_KEY_FILE")
 
+
+	// Log all enabled features
+	utils.Log.WithFields(map[string]interface{}{
+		"port":             port,
+		"https":            useHTTPS,
+		"csrf_protection":  true,
+		"security_headers": true,
+		"logging":          true,
+		"metrics":          true,
+	}).Info("🎯 Server configuration")
+	
+	
 	if useHTTPS && certFile != "" && keyFile != "" {
 		// HTTPS Configuration
 		log.Println("🔒 Starting server with HTTPS on port", port)
