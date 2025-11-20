@@ -1,9 +1,11 @@
 package main
 
 import (
+	"awesomeProject/cache"
 	"awesomeProject/db"
 	"awesomeProject/handlers"
 	"awesomeProject/middleware"
+	"awesomeProject/models"
 	"awesomeProject/monitoring"
 	"awesomeProject/utils"
 	"crypto/tls"
@@ -25,9 +27,29 @@ func main() {
 	utils.InitLogger()
 	utils.Log.Info("🚀 Starting application...")
 
-	
 	db.InitDB()
 	utils.Log.Info("✅ Database connected and migrated")
+
+	// Initialize Redis Cache
+	if err := cache.InitRedis(); err != nil {
+		utils.Log.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Warn("⚠️  Redis connection failed, running without cache")
+	} else {
+		utils.Log.Info("✅ Redis cache connected")
+
+		// Optional: Warm up cache with frequently accessed data
+		// cache.WarmCache()
+	}
+
+	// Ensure Redis closes on shutdown
+	defer func() {
+		if err := cache.CloseRedis(); err != nil {
+			utils.Log.Error("Failed to close Redis connection", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}()
 
 	monitoring.InitMetrics()
 	utils.Log.Info("📊 Prometheus metrics initialized")
@@ -63,12 +85,44 @@ func main() {
 	// Prometheus metrics endpoint
 	r.GET("/metrics", monitoring.PrometheusHandler())
 
-	// Health check endpoint
+	// Health check endpoint with Redis status
 	r.GET("/health", func(c *gin.Context) {
+		redisStatus := "disconnected"
+		if cache.IsRedisAvailable() {
+			redisStatus = "connected"
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "healthy",
 			"version": "1.0.0",
+			"cache":   redisStatus,
+			"redis":   cache.RedisClient != nil,
 		})
+	})
+
+	// Cache flush endpoint (admin only, use with caution!)
+	r.POST("/cache/flush", handlers.AuthMiddleware(), func(c *gin.Context) {
+		user := c.MustGet("user").(models.User)
+		if user.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admins only"})
+			return
+		}
+
+		if !cache.IsRedisAvailable() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Redis not available"})
+			return
+		}
+
+		if err := cache.FlushAll(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		utils.Log.Warn("Cache flushed by admin", map[string]interface{}{
+			"user_id": user.ID,
+		})
+
+		c.JSON(http.StatusOK, gin.H{"message": "Cache flushed successfully"})
 	})
 
 	// CSRF token endpoint (public, no auth required)
@@ -116,7 +170,6 @@ func main() {
 	certFile := os.Getenv("TLS_CERT_FILE")
 	keyFile := os.Getenv("TLS_KEY_FILE")
 
-
 	// Log all enabled features
 	utils.Log.WithFields(map[string]interface{}{
 		"port":             port,
@@ -126,8 +179,7 @@ func main() {
 		"logging":          true,
 		"metrics":          true,
 	}).Info("🎯 Server configuration")
-	
-	
+
 	if useHTTPS && certFile != "" && keyFile != "" {
 		// HTTPS Configuration
 		log.Println("🔒 Starting server with HTTPS on port", port)
