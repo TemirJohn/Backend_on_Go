@@ -69,9 +69,6 @@ func main() {
 	r.Use(middleware.RateLimitInfo())
 	r.Use(middleware.RemovePoweredBy())
 
-	// More lenient global rate limiting for development
-	//r.Use(middleware.RateLimitMiddleware(300, time.Minute)) // 300 requests per minute
-
 	// CORS Configuration
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000", "https://localhost:3000"},
@@ -106,7 +103,6 @@ func main() {
 
 	// ==================== PUBLIC ROUTES ====================
 	public := r.Group("/")
-	//public.Use(middleware.RateLimitMiddleware(50, time.Minute)) // 50 per minute for public
 	{
 		public.POST("/login", handlers.Login)
 		public.POST("/users", handlers.Register)
@@ -132,6 +128,9 @@ func main() {
 		protected.GET("/library", handlers.GetLibrary)
 		protected.POST("/ownership", handlers.BuyGame)
 
+		// 🆕 CONCURRENT: Library with detailed info
+		protected.GET("/library/detailed", handlers.GetUserLibraryWithDetails)
+
 		// Categories
 		protected.POST("/categories", handlers.CreateCategory)
 		protected.PUT("/categories/:id", handlers.UpdateCategory)
@@ -148,6 +147,9 @@ func main() {
 		// Reviews
 		protected.POST("/reviews", handlers.CreateReview)
 		protected.DELETE("/reviews/:id", handlers.DeleteReview)
+
+		// 🆕 CONCURRENT: Advanced game details
+		protected.GET("/games/:id/details", handlers.GetGameDetailsAdvanced)
 	}
 
 	// ==================== ADMIN ROUTES ====================
@@ -156,7 +158,13 @@ func main() {
 	admin.Use(middleware.CSRFProtection())
 	{
 		// Dashboard statistics (simple version)
-		admin.GET("/dashboard/stats", handlers.GetDashboardStats)
+		admin.GET("/dashboard/stats", handlers.GetDashboardStatistics)
+
+		// 🆕 CONCURRENT: Bulk operations
+		admin.POST("/games/bulk-update-prices", handlers.BulkUpdateGamePrices)
+		admin.POST("/games/validate-all", handlers.ValidateAllGames)
+		admin.POST("/games/:id/notify", handlers.SendGameReleaseNotifications)
+		admin.POST("/games/:id/process-images", handlers.ProcessGameImages)
 	}
 
 	port := os.Getenv("PORT")
@@ -171,14 +179,15 @@ func main() {
 
 	// Log all enabled features
 	utils.Log.WithFields(map[string]interface{}{
-		"port":             port,
-		"https":            useHTTPS,
-		"csrf_protection":  true,
-		"security_headers": true,
-		"logging":          true,
-		"metrics":          true,
-		"redis_cache":      cache.IsRedisAvailable(),
-		"rate_limiting":    true,
+		"port":                port,
+		"https":               useHTTPS,
+		"csrf_protection":     true,
+		"security_headers":    true,
+		"logging":             true,
+		"metrics":             true,
+		"redis_cache":         cache.IsRedisAvailable(),
+		"rate_limiting":       true,
+		"concurrent_handlers": true, // 🆕
 	}).Info("🎯 Server configuration")
 
 	if useHTTPS && certFile != "" && keyFile != "" {
