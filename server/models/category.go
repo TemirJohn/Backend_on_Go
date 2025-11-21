@@ -5,7 +5,7 @@ type Category struct {
 	Name string `gorm:"not null" json:"name" validate:"required,min=2,max=100"`
 }
 
-// CategoryInput - для создания/обновления категории
+// CategoryInput - for create/update category
 type CategoryInput struct {
 	Name string `json:"name" validate:"required,min=2,max=100"`
 }

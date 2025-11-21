@@ -1,0 +1,64 @@
+# Prometheus Alert Rules
+groups:
+  - name: gamehub_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "Error rate is {{ $value }} errors/sec for {{ $labels.endpoint }}"
+
+      # Slow response time alert
+      - alert: SlowResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow API response time"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.endpoint }}"
+
+      # High memory usage (if added)
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes > 500000000  # 500MB
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}B"
+
+      # Service down alert
+      - alert: ServiceDown
+        expr: up{job="gamehub"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GameHub service is down"
+          description: "GameHub service has been down for more than 1 minute"
+
+      # Too many authentication failures
+      - alert: HighAuthenticationFailures
+        expr: rate(authentication_attempts_total{status="failure"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} failures/sec"
+
+      # Too many active connections
+      - alert: TooManyConnections
+        expr: active_connections > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Too many active connections"
+          description: "Active connections: {{ $value }}"

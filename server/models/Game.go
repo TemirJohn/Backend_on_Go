@@ -11,7 +11,7 @@ type Game struct {
 	DeveloperID uint     `json:"developerId" validate:"required,gte=1"`
 }
 
-// GameCreateInput - для создания игры через form-data
+// GameCreateInput - for create game
 type GameCreateInput struct {
 	Name        string  `form:"name" validate:"required,min=1,max=200"`
 	Price       float64 `form:"price" validate:"required,gte=0"`
@@ -20,7 +20,7 @@ type GameCreateInput struct {
 	DeveloperID uint    `form:"developerId" validate:"required,gte=1"`
 }
 
-// GameUpdateInput - для обновления игры
+// GameUpdateInput - for update game
 type GameUpdateInput struct {
 	Name        *string  `form:"name" validate:"omitempty,min=1,max=200"`
 	Price       *float64 `form:"price" validate:"omitempty,gte=0"`

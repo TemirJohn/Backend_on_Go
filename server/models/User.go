@@ -13,13 +13,13 @@ type User struct {
 	IsBanned bool   `gorm:"default:false" json:"isBanned"`
 }
 
-// LoginInput - используется для валидации логина
+// LoginInput - use for valid in Login
 type LoginInput struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=6"`
 }
 
-// RegisterInput - используется для валидации регистрации
+// RegisterInput - use for valid in regist
 type RegisterInput struct {
 	Username string `json:"username" form:"username" validate:"required,min=3,max=50"`
 	Email    string `json:"email" form:"email" validate:"required,email"`
@@ -27,7 +27,7 @@ type RegisterInput struct {
 	Role     string `json:"role" form:"role" validate:"required,oneof=user developer admin"`
 }
 
-// UpdateUserInput - используется для обновления пользователя
+// UpdateUserInput - use for update data
 type UpdateUserInput struct {
 	Name     *string `json:"name" form:"name" validate:"omitempty,min=3,max=50"`
 	Role     *string `json:"role" form:"role" validate:"omitempty,oneof=user developer admin"`

@@ -8,7 +8,7 @@ type Ownership struct {
 	Game   Game   `gorm:"foreignKey:GameID" json:"game"`
 }
 
-// BuyGameInput - для покупки игры
+// BuyGameInput - for buy game
 type BuyGameInput struct {
 	GameID uint `json:"gameId" validate:"required,gte=1"`
 }
