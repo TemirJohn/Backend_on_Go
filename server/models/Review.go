@@ -9,7 +9,7 @@ type Review struct {
 	Comment string `json:"comment" validate:"max=1000"`
 }
 
-// ReviewCreateInput - для создания отзыва
+// ReviewCreateInput - for create review
 type ReviewCreateInput struct {
 	GameID  uint   `json:"gameId" validate:"required,gte=1"`
 	Rating  int    `json:"rating" validate:"required,gte=1,lte=5"`

@@ -16,11 +16,16 @@ func Login(c *gin.Context) {
 	var input models.LoginInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
+
+		utils.LogWarn("Invalid login input", map[string]interface{}{
+			"error": err.Error(),
+			"ip":    c.ClientIP(),
+		})
+
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// ДОБАВЛЕНО: Валидация
 	if err := utils.ValidateStruct(input); err != nil {
 		utils.ValidationErrorResponse(c, err)
 		return
@@ -28,6 +33,12 @@ func Login(c *gin.Context) {
 
 	var user models.User
 	if err := db.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+
+		utils.LogWarn("Failed login attempt", map[string]interface{}{
+			"email": input.Email,
+			"error": err.Error(),
+		})
+
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный email или пароль"})
 		return
 	}
