@@ -108,7 +108,7 @@ func main() {
 		public.POST("/users", handlers.Register)
 		public.GET("/games", handlers.GetGames)
 		public.GET("/games/:id", handlers.GetGameByID)
-		public.GET("/games/search", handlers.SearchGames) // Search endpoint
+		public.GET("/games/search", handlers.SearchGamesAdvanced) // Search endpoint
 		public.GET("/categories", handlers.GetCategories)
 		public.GET("/reviews", handlers.GetReviews)
 	}
@@ -150,21 +150,14 @@ func main() {
 
 		// 🆕 CONCURRENT: Advanced game details
 		protected.GET("/games/:id/details", handlers.GetGameDetailsAdvanced)
-	}
 
-	// ==================== ADMIN ROUTES ====================
-	admin := r.Group("/admin")
-	admin.Use(handlers.AuthMiddleware())
-	admin.Use(middleware.CSRFProtection())
-	{
-		// Dashboard statistics (simple version)
-		admin.GET("/dashboard/stats", handlers.GetDashboardStatistics)
+		protected.GET("/dashboard/stats", handlers.GetDashboardStatistics)
 
 		// 🆕 CONCURRENT: Bulk operations
-		admin.POST("/games/bulk-update-prices", handlers.BulkUpdateGamePrices)
-		admin.POST("/games/validate-all", handlers.ValidateAllGames)
-		admin.POST("/games/:id/notify", handlers.SendGameReleaseNotifications)
-		admin.POST("/games/:id/process-images", handlers.ProcessGameImages)
+		protected.POST("/games/bulk-update-prices", handlers.BulkUpdateGamePrices)
+		protected.POST("/games/validate-all", handlers.ValidateAllGames)
+		protected.POST("/games/:id/notify", handlers.SendGameReleaseNotifications)
+		protected.POST("/games/:id/process-images", handlers.ProcessGameImages)
 	}
 
 	port := os.Getenv("PORT")

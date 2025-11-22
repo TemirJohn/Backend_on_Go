@@ -345,20 +345,20 @@ func sendNotification(job NotificationJob) NotificationResult {
 // ==================== 4. DASHBOARD STATISTICS ====================
 
 type DashboardStats struct {
-	TotalUsers    int64
-	TotalGames    int64
-	TotalReviews  int64
-	TotalSales    int64
-	ActiveUsers   int64
-	RecentGames   int64
-	AverageRating float64
-	TopCategory   string
-	Error         error
+	TotalUsers    int64   `json:"total_users"`
+	TotalGames    int64   `json:"total_games"`
+	TotalReviews  int64   `json:"total_reviews"`
+	TotalSales    int64   `json:"total_sales"`
+	ActiveUsers   int64   `json:"active_users"`
+	RecentGames   int64   `json:"recent_games"`
+	AverageRating float64 `json:"average_rating"`
+	TopCategory   string  `json:"top_category"`
+	Error         error   `json:"-"` // Ошибку можно не отправлять или отправлять как `json:"error"`
 }
 
-// CalculateDashboardStats вычисляет статистику параллельно (ИСПРАВЛЕНО)
+// CalculateDashboardStats вычисляет статистику параллельно
 func CalculateDashboardStats() (*DashboardStats, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	stats := &DashboardStats{}
@@ -393,13 +393,7 @@ func CalculateDashboardStats() (*DashboardStats, error) {
 	})
 
 	// 6. Недавние игры
-	g.Go(func() error {
-		thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
-		return db.DB.WithContext(ctx).
-			Model(&models.Game{}).
-			Where("created_at > ?", thirtyDaysAgo).
-			Count(&stats.RecentGames).Error
-	})
+	stats.RecentGames = 0
 
 	// 7. Средний рейтинг
 	g.Go(func() error {
@@ -456,7 +450,7 @@ type SearchResult struct {
 	SearchTime time.Duration
 }
 
-// ParallelSearch выполняет поиск по разным критериям параллельно (ИСПРАВЛЕНО)
+// ParallelSearch выполняет поиск по разным критериям параллельно
 func ParallelSearch(query string) (*SearchResult, error) {
 	start := time.Now()
 
@@ -507,7 +501,7 @@ func ParallelSearch(query string) (*SearchResult, error) {
 	}
 
 	// Преобразуем в массив
-	var finalGames []models.Game
+	finalGames := make([]models.Game, 0)
 	for _, game := range resultMap {
 		finalGames = append(finalGames, game)
 	}
