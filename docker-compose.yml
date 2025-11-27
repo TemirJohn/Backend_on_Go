@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: gamehub_postgres
+    environment:
+      POSTGRES_DB: gamehub
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-11466795}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gamehub_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: gamehub_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gamehub_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Backend (Go)
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: gamehub_backend
+    environment:
+      - DATABASE_URL=host=postgres port=5432 user=postgres dbname=gamehub password=${DB_PASSWORD:-11466795} sslmode=disable
+      - REDIS_URL=redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_key_change_in_production}
+      - GIN_MODE=${GIN_MODE:-release}
+      - PORT=8080
+      - USE_HTTPS=true
+      - TLS_CERT_FILE=/root/certs/localhost.crt
+      - TLS_KEY_FILE=/root/certs/localhost.key
+      - LOG_LEVEL=info
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./server/uploads:/root/uploads
+      - ./server/cmd/.env:/root/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gamehub_network
+    restart: unless-stopped
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: /Users/temirzhan/WebstormProjects/game_hub
+      dockerfile: Dockerfile
+    container_name: gamehub_frontend
+    ports:
+      - "3000:443"
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - gamehub_network
+    restart: unless-stopped
+
+
+networks:
+  gamehub_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
