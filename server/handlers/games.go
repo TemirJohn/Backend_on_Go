@@ -162,11 +162,13 @@ func CreateGame(c *gin.Context) {
 	}
 
 	// Invalidate caches
-	if cache.IsRedisAvailable() {
-		cache.InvalidateGamesList()
-		cache.InvalidateDashboardStats()
-		utils.Log.Info("Cache invalidated after game creation")
-	}
+	go func() {
+		if cache.IsRedisAvailable() {
+			cache.InvalidateGamesList()
+			cache.InvalidateDashboardStats()
+			utils.Log.Info("Games list cache invalidated after creation (ASYNC)")
+		}
+	}()
 
 	c.JSON(http.StatusOK, game)
 }
@@ -220,11 +222,13 @@ func UpdateGame(c *gin.Context) {
 	}
 
 	// Invalidate caches
-	if cache.IsRedisAvailable() {
-		cache.InvalidateGame(uint(gameID))
-		cache.InvalidateGamesList()
-		utils.Log.Info(fmt.Sprintf("Cache invalidated for game %d", gameID))
-	}
+	go func(gID uint) {
+		if cache.IsRedisAvailable() {
+			cache.InvalidateGame(gID)
+			cache.InvalidateGamesList()
+			utils.Log.Info(fmt.Sprintf("Game %d caches invalidated (ASYNC)", gID))
+		}
+	}(game.ID)
 
 	c.JSON(http.StatusOK, game)
 }

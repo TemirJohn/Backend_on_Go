@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # 1. Elasticsearch - База данных для логов
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
+    container_name: gamehub_elastic
+    environment:
+      - node.name=gamehub-es01
+      - cluster.name=gamehub-docker-cluster
+      - discovery.type=single-node # Важно для одиночного запуска
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Ограничиваем память (Java прожорлива)
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - elk_net
+    restart: unless-stopped
+
+  # 2. Kibana - Визуализация
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.10
+    container_name: gamehub_kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - elk_net
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  # 3. Filebeat - Сборщик логов
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.17.10
+    container_name: gamehub_filebeat
+    user: root # Нужно, чтобы читать docker сокеты и системные файлы
+    command: ["--strict.perms=false"] # Отключаем строгую проверку прав конфига (для Windows/Dev удобнее)
+    volumes:
+      # Монтируем конфиг
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      # ВАЖНО: Монтируем папку с логами вашего Go приложения
+      # ./logs - папка на хосте (где лежит app.log)
+      # /var/log/app_logs - папка внутри контейнера (указана в filebeat.yml)
+      - ./logs:/var/log/app_logs:ro
+    networks:
+      - elk_net
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+networks:
+  elk_net:
+    driver: bridge
+
+volumes:
+  elastic_data:

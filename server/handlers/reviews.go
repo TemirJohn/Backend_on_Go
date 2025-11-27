@@ -29,10 +29,12 @@ func CreateReview(c *gin.Context) {
 	}
 
 	// Invalidate reviews cache for this game
-	if cache.IsRedisAvailable() {
-		cache.InvalidateReviews(review.GameID)
-		utils.Log.Info(fmt.Sprintf("Reviews cache invalidated for game %d", review.GameID))
-	}
+	go func(gID uint) {
+		if cache.IsRedisAvailable() {
+			cache.InvalidateReviews(gID)
+			utils.Log.Info(fmt.Sprintf("Reviews cache invalidated for game %d (ASYNC)", gID))
+		}
+	}(review.GameID)
 
 	c.JSON(http.StatusOK, review)
 }
@@ -92,7 +94,7 @@ func DeleteReview(c *gin.Context) {
 		return
 	}
 
-	gameID := review.GameID // Save before deletion
+	//gameID := review.GameID // Save before deletion
 
 	if err := db.DB.Delete(&review).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete review"})
@@ -100,10 +102,12 @@ func DeleteReview(c *gin.Context) {
 	}
 
 	// Invalidate reviews cache for this game
-	if cache.IsRedisAvailable() {
-		cache.InvalidateReviews(gameID)
-		utils.Log.Info(fmt.Sprintf("Reviews cache invalidated for game %d after deletion", gameID))
-	}
+	go func(gID uint) {
+		if cache.IsRedisAvailable() {
+			cache.InvalidateReviews(gID)
+			utils.Log.Info(fmt.Sprintf("Reviews cache invalidated for game %d (ASYNC)", gID))
+		}
+	}(review.GameID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Review deleted"})
 }

@@ -128,9 +128,6 @@ func main() {
 		protected.GET("/library", handlers.GetLibrary)
 		protected.POST("/ownership", handlers.BuyGame)
 
-		// 🆕 CONCURRENT: Library with detailed info
-		protected.GET("/library/detailed", handlers.GetUserLibraryWithDetails)
-
 		// Categories
 		protected.POST("/categories", handlers.CreateCategory)
 		protected.PUT("/categories/:id", handlers.UpdateCategory)
@@ -149,15 +146,11 @@ func main() {
 		protected.DELETE("/reviews/:id", handlers.DeleteReview)
 
 		// 🆕 CONCURRENT: Advanced game details
-		protected.GET("/games/:id/details", handlers.GetGameDetailsAdvanced)
-
 		protected.GET("/dashboard/stats", handlers.GetDashboardStatistics)
 
 		// 🆕 CONCURRENT: Bulk operations
-		protected.POST("/games/bulk-update-prices", handlers.BulkUpdateGamePrices)
+		//protected.POST("/games/bulk-update-prices", handlers.BulkUpdateGamePrices)
 		protected.POST("/games/validate-all", handlers.ValidateAllGames)
-		protected.POST("/games/:id/notify", handlers.SendGameReleaseNotifications)
-		protected.POST("/games/:id/process-images", handlers.ProcessGameImages)
 	}
 
 	port := os.Getenv("PORT")

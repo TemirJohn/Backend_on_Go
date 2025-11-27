@@ -1,0 +1,17 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/app_logs/*.log # Путь внутри контейнера (см. volumes ниже)
+    json.keys_under_root: true  # Распаковывать JSON на верхний уровень
+    json.add_error_key: true    # Если JSON битый, добавить флаг ошибки
+    json.overwrite_keys: true   # Разрешить перезапись полей
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  # Если захотите добавить логин/пароль позже:
+  # username: "elastic"
+  # password: "changeme"
+
+setup.kibana:
+  host: "kibana:5601"

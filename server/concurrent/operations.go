@@ -180,6 +180,7 @@ func FetchGameWithDetails(gameID uint) (*GameDetails, error) {
 type GameProcessingJob struct {
 	Game   models.Game
 	Action string
+	Value  float64
 }
 
 type GameProcessingResult struct {
@@ -190,7 +191,7 @@ type GameProcessingResult struct {
 }
 
 // ProcessBulkGames обрабатывает множество игр параллельно (БЕЗ ИЗМЕНЕНИЙ - код корректен)
-func ProcessBulkGames(games []models.Game, action string, numWorkers int) ([]GameProcessingResult, error) {
+func ProcessBulkGames(games []models.Game, action string, value float64, numWorkers int) ([]GameProcessingResult, error) {
 	if numWorkers <= 0 {
 		numWorkers = 10
 	}
@@ -216,6 +217,7 @@ func ProcessBulkGames(games []models.Game, action string, numWorkers int) ([]Gam
 			jobs <- GameProcessingJob{
 				Game:   game,
 				Action: action,
+				Value:  value,
 			}
 		}
 		close(jobs)
@@ -256,7 +258,7 @@ func processGame(job GameProcessingJob, workerID int) GameProcessingResult {
 		}
 
 	case "update_prices":
-		newPrice := job.Game.Price * 0.9
+		newPrice := job.Game.Price * job.Value
 		db.DB.Model(&job.Game).Update("price", newPrice)
 		return GameProcessingResult{
 			GameID:  job.Game.ID,
@@ -273,76 +275,7 @@ func processGame(job GameProcessingJob, workerID int) GameProcessingResult {
 	}
 }
 
-// ==================== 3. NOTIFICATIONS WITH CONCURRENCY ====================
-
-type NotificationJob struct {
-	UserID  uint
-	Message string
-	Type    string
-}
-
-type NotificationResult struct {
-	UserID  uint
-	Success bool
-	Error   error
-}
-
-// SendBulkNotifications отправляет уведомления параллельно (ИСПРАВЛЕНО)
-func SendBulkNotifications(notifications []NotificationJob, maxWorkers int) ([]NotificationResult, error) {
-	if maxWorkers <= 0 {
-		maxWorkers = 10
-	}
-
-	g := new(errgroup.Group)
-	g.SetLimit(maxWorkers) // Ограничиваем количество одновременных goroutines
-
-	results := make([]NotificationResult, len(notifications))
-	var mu sync.Mutex // Защита от race condition при записи в slice
-
-	for i, job := range notifications {
-		i, job := i, job // Захват переменных цикла
-		g.Go(func() error {
-			result := sendNotification(job)
-
-			mu.Lock()
-			results[i] = result
-			mu.Unlock()
-
-			return nil // Не прерываем выполнение при ошибке отправки
-		})
-	}
-
-	g.Wait()
-	return results, nil
-}
-
-func sendNotification(job NotificationJob) NotificationResult {
-	time.Sleep(100 * time.Millisecond)
-
-	var user models.User
-	if err := db.DB.First(&user, job.UserID).Error; err != nil {
-		return NotificationResult{
-			UserID:  job.UserID,
-			Success: false,
-			Error:   err,
-		}
-	}
-
-	if user.IsBanned {
-		return NotificationResult{
-			UserID:  job.UserID,
-			Success: false,
-			Error:   fmt.Errorf("user is banned"),
-		}
-	}
-
-	return NotificationResult{
-		UserID:  job.UserID,
-		Success: true,
-	}
-}
-
-// ==================== 4. DASHBOARD STATISTICS ====================
+// ==================== DASHBOARD STATISTICS ====================
 
 type DashboardStats struct {
 	TotalUsers    int64   `json:"total_users"`
@@ -511,115 +444,4 @@ func ParallelSearch(query string) (*SearchResult, error) {
 		TotalFound: len(finalGames),
 		SearchTime: time.Since(start),
 	}, nil
-}
-
-// ==================== 6. IMAGE PROCESSING PIPELINE ====================
-
-type ImageProcessingJob struct {
-	GameID    uint
-	ImageData []byte
-	Filename  string
-}
-
-type ProcessedImage struct {
-	Original  []byte
-	Thumbnail []byte
-	Metadata  map[string]interface{}
-	GameID    uint
-	Error     error
-}
-
-// ProcessImagesInPipeline обрабатывает изображения через pipeline (ИСПРАВЛЕНО)
-func ProcessImagesInPipeline(jobs []ImageProcessingJob) ([]ProcessedImage, error) {
-	// Создаем каналы для pipeline
-	validationChan := make(chan ImageProcessingJob)
-	thumbnailChan := make(chan ProcessedImage)
-	metadataChan := make(chan ProcessedImage)
-	results := make(chan ProcessedImage)
-
-	var wg sync.WaitGroup
-
-	// Stage 1: Validation workers (3 workers)
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for job := range validationChan {
-				if len(job.ImageData) == 0 {
-					results <- ProcessedImage{
-						GameID: job.GameID,
-						Error:  fmt.Errorf("empty image data"),
-					}
-					continue
-				}
-				thumbnailChan <- ProcessedImage{
-					GameID:   job.GameID,
-					Original: job.ImageData,
-				}
-			}
-		}()
-	}
-
-	// Stage 2: Thumbnail workers (2 workers)
-	var thumbnailWg sync.WaitGroup
-	for i := 0; i < 2; i++ {
-		thumbnailWg.Add(1)
-		go func() {
-			defer thumbnailWg.Done()
-			for img := range thumbnailChan {
-				time.Sleep(50 * time.Millisecond)
-				img.Thumbnail = img.Original
-				metadataChan <- img
-			}
-		}()
-	}
-
-	// Stage 3: Metadata workers (2 workers)
-	var metadataWg sync.WaitGroup
-	for i := 0; i < 2; i++ {
-		metadataWg.Add(1)
-		go func() {
-			defer metadataWg.Done()
-			for img := range metadataChan {
-				time.Sleep(30 * time.Millisecond)
-				img.Metadata = map[string]interface{}{
-					"size":   len(img.Original),
-					"format": "jpeg",
-				}
-				results <- img
-			}
-		}()
-	}
-
-	// Отправитель заданий
-	go func() {
-		for _, job := range jobs {
-			validationChan <- job
-		}
-		close(validationChan) // Отправитель закрывает канал
-	}()
-
-	// Управление закрытием каналов (исправлено)
-	go func() {
-		wg.Wait()
-		close(thumbnailChan)
-	}()
-
-	go func() {
-		thumbnailWg.Wait()
-		close(metadataChan)
-	}()
-
-	go func() {
-		metadataWg.Wait()
-		close(results)
-	}()
-
-	// Сбор результатов
-	var processedImages []ProcessedImage
-	for img := range results {
-		processedImages = append(processedImages, img)
-	}
-
-	return processedImages, nil
 }

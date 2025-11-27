@@ -39,12 +39,13 @@ func BuyGame(c *gin.Context) {
 		return
 	}
 
-	// Invalidate user's library cache and stats
-	if cache.IsRedisAvailable() {
-		cache.InvalidateUserLibrary(user.ID)
-		cache.InvalidateDashboardStats()
-		utils.Log.Info(fmt.Sprintf("Library cache invalidated for user %d after purchase", user.ID))
-	}
+	go func(uID uint) {
+		if cache.IsRedisAvailable() {
+			cache.InvalidateUserLibrary(uID)
+			cache.InvalidateDashboardStats()
+			utils.Log.Info(fmt.Sprintf("Library cache invalidated for user %d (ASYNC)", uID))
+		}
+	}(user.ID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Game purchased"})
 }
